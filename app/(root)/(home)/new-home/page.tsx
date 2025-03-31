@@ -14,7 +14,7 @@ const Home = () => {
   const time = now.toLocaleString('en-Us',{hour:'2-digit',minute:'2-digit'});
   const date = (new Intl.DateTimeFormat('en-Us',{dateStyle: 'full'})).format(now)
   return (
-    <section className='flex size-full flex-col text-white gap-10'>
+    <section className='flex size-full flex-col text-white gap-12'>
       <div className='h-[300px] w-full rounded-[20px] bg-hero bg-cover'>
         <div className='flex h-full justify-between flex-col max-md:px-5 max-md:py-8 lg:p-11'>
           <h2 className='glassmorphism max-w-[270px] rounded py-2 text-center font-poppins text-2xl'>Hi {user?.username}</h2>

@@ -1,39 +1,59 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import React from 'react'
-import MobileNav from './MobileNav'
-import { SignedIn, UserButton } from '@clerk/nextjs'
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import React from "react";
+import MobileNav from "./MobileNav";
+import { SignedIn, UserButton } from "@clerk/nextjs";
 
 const Navbar = () => {
   return (
-    <nav className='flex-between fixed z-50 w-full px-32 py-3 lg:px-10 items-center overflow-x-hidden'>
-      <Link href='/' className='flex items-center gap-1'>
-      <Image
-      src='/icons/logo.png'
-      alt='logo'
-      width={32}
-      height={32}
-      className='max-sm:size-10 text-red-400'
-      />
-      <p className='text-[26px] font-extrabold'>Virual Doctor</p>
-      </Link>
-      <div className='md:flex gap-10 hidden border p-5 shadow-md rounded-full'>
-        <Link href={'/doctor-page'} className='text-lg font-semibold font-poppins text-green-1'>Find A Doctor</Link>
-        <Link href={'/'} className='text-lg font-semibold font-poppins text-green-1'>Pharmacies</Link>
-        <Link href={'/'} className='text-lg font-semibold font-poppins text-green-1'>Hospitals</Link>
-        <Link href={'/'} className='text-lg font-semibold font-poppins text-green-1'>Contact</Link>
+    <nav className="fixed top-0 z-50 w-full backdrop-blur-md bg-white/70 shadow-sm font-poppins">
+      <div className="flex-between mx-auto max-w-7xl px-6 py-4">
+        {/* Logo + Brand */}
+        <Link href="/" className="flex items-center gap-2">
+          <Image
+            src="/images/logo3.png"
+            alt="logo"
+            width={80}
+            height={80}
+            className="rounded-full"
+          />
+          <p className="text-2xl font-extrabold tracking-widest text-green-600">
+           afya
+          </p>
+        </Link>
 
-      </div>
-      <div className='flex-between gap-5 text-black'>
-        {/* clerk user management */}
-        <SignedIn>
-              <UserButton/>
-        </SignedIn>
-      <MobileNav/>
+        {/* Desktop Menu */}
+        <div className="hidden md:flex items-center gap-8">
+          <Link
+            href="/doctor-page"
+            className="nav-link"
+          >
+            Find a Doctor
+          </Link>
+          <Link href="/" className="nav-link">
+            Pharmacies
+          </Link>
+          <Link href="/" className="nav-link">
+            Hospitals
+          </Link>
+          <Link href="/" className="nav-link">
+            Contact
+          </Link>
+        </div>
 
+        {/* User + Mobile Menu */}
+        <div className="flex items-center gap-4">
+          <SignedIn>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
+          <MobileNav />
+        </div>
       </div>
     </nav>
-  )
-}
+  );
+};
 
-export default Navbar
+export default Navbar;
+

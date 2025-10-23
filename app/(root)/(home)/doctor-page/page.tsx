@@ -1,22 +1,26 @@
-import DoctorCard from '@/components/DoctorCard'
-import { Button } from '@/components/ui/button'
+'use client'
 import React from 'react'
+import DoctorCard from '@/components/DoctorCard'
 
-const page = () => {
+const Page = () => {
   return (
-    <div>
-        <h1 className='leading-10 text-4xl font-poppins font-semibold text-center mb-5 mt-20'>Good Health Starts <br /> with the Right Doctor</h1>
-        <h1 className='text-gray-400 text-lg font-poppins text-center'>Empowering You To Live The fullest Life</h1>
-        <div>
-            <DoctorCard/>
+    <div className="min-h-screen font-poppins">
+      <div className="px-6 md:px-16">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Doctors Section */}
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Available Doctors</h2>
+              <div className="h-px flex-1 bg-gradient-to-r from-green-600 to-transparent ml-6"></div>
+            </div>
+            
+            {/* Doctor Card Component with all functionality */}
+            <DoctorCard />
+          </div>
         </div>
-        <div className='flex items-center justify-center mt-10'>
-            <Button className='rounded-full px-4 py-6 text-lg text-green-1'>
-                See Full List
-            </Button>
-        </div>
+      </div>
     </div>
   )
 }
 
-export default page
+export default Page

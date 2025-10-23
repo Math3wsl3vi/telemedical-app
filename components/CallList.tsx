@@ -46,7 +46,7 @@ const CallList = ({type}:{type : 'ended' | 'upcoming' | 'recordings'}) => {
 
     return (
         <div className='grid grid-cols-1 gap-5 xl:grid-cols-3 md:grid-cols-2'>
-            {calls && calls.length > 0 ? calls.map((meeting: Call | CallRecording) => {
+            {calls && calls.length > 0 ? calls.map((meeting: Call | CallRecording, index) => {
                 if (isCall(meeting)) {
                     return (
                         <MeetingCard
@@ -63,7 +63,7 @@ const CallList = ({type}:{type : 'ended' | 'upcoming' | 'recordings'}) => {
                 } else if (isCallRecording(meeting)) {
                     return (
                         <MeetingCard
-                            key={meeting.id}
+                            key={meeting.filename || meeting.url || `recording-${index}`}
                             title={meeting.filename?.substring(0, 20) || 'Recording'}
                             icon="/icons/recordings.svg"
                             date={meeting.start_time?.toLocaleString() || ''}

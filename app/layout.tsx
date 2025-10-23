@@ -16,11 +16,12 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-const poppins = Poppins({
-  weight: ['400', '600', '700'], // Choose desired weights
-  subsets: ['latin'],           // Subsets for language support
-});
 
+const poppins = Poppins({
+  weight: ['400', '600', '700'],
+  subsets: ['latin'],
+  variable: '--font-poppins',
+});
 
 export const metadata: Metadata = {
   title: "Virtual Hospital",
@@ -37,25 +38,25 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-    <ClerkProvider 
-    
-    appearance={{
-      layout:{
-        logoImageUrl:'/icons/logo.png',
-        socialButtonsVariant:'iconButton'
-      },
-        variables:{
-        colorPrimary:'#007e6d',
-        colorText:'#222'
-      }
-    }}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} poppins.className text-black antialiased`}
+      <ClerkProvider 
+        appearance={{
+          layout:{
+            logoImageUrl:'/icons/logo.png',
+            socialButtonsVariant:'iconButton'
+          },
+          variables:{
+            colorPrimary:'#007e6d',
+            colorText:'#222'
+          }
+        }}
       >
-        {children}
-        <Toaster/>
-      </body>
-    </ClerkProvider>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} text-black antialiased`}
+        >
+          {children}
+          <Toaster/>
+        </body>
+      </ClerkProvider>
     </html>
   );
 }

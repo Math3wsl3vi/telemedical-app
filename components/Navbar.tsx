@@ -19,8 +19,8 @@ const Navbar = () => {
             height={80}
             className="rounded-full"
           />
-          <p className="text-2xl font-extrabold tracking-widest text-green-600">
-           afya
+          <p className="text-2xl font-extrabold text-green-600">
+           telemedicine
           </p>
         </Link>
 

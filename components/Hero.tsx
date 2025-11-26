@@ -138,10 +138,10 @@ const HomePage = () => {
             <div className="relative">
               <div className="bg-green-50 border-4 border-green-200 p-8">
                 <Image
-                  src="https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=800"
+                 src="https://images.unsplash.com/photo-1609188076864-c35269136b09?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8YWZyaWNhbiUyMGRvY3RvcnxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&q=60&w=400"
                   alt="Healthcare Professional"
-                  width={600}
-                  height={600}
+                  width={800}
+                  height={800}
                   className="w-full h-auto object-cover"
                 />
               </div>

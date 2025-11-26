@@ -48,6 +48,9 @@ const config = {
         green:{
           1:'#007e6d',
         },
+        primary: '#3B82F6', // Blue from Mantle Telemedicine
+        secondary: '#10B981', // Green for accents
+        background: '#F3F4F6', // Light gray background
       },
       keyframes: {
         'accordion-down': {

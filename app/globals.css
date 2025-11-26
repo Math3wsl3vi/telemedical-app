@@ -7,6 +7,9 @@
   padding: 0;
   box-sizing: border-box;
 }
+body {
+  @apply bg-background text-gray-900;
+}
 
 /* ======== stream css overrides ======== */
 .str-video__call-stats {

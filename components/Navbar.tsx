@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import React from "react";
 import MobileNav from "./MobileNav";
@@ -12,15 +11,8 @@ const Navbar = () => {
       <div className="flex-between mx-auto max-w-7xl px-6 py-4">
         {/* Logo + Brand */}
         <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/images/logo3.png"
-            alt="logo"
-            width={80}
-            height={80}
-            className="rounded-full"
-          />
           <p className="text-2xl font-extrabold text-green-600">
-           telemedicine
+          DaktariConnect
           </p>
         </Link>
 

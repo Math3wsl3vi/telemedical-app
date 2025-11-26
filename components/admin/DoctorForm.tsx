@@ -11,7 +11,6 @@ export default function DoctorForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setSubmitting(true);
@@ -46,7 +45,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     setSubmitting(false);
   }
 };
-  }
+
 
   return (
     <form onSubmit={handleSubmit} className="p-6 bg-white rounded-lg shadow-md">

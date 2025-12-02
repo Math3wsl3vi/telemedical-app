@@ -1,16 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, User, Calendar, DollarSign } from 'lucide-react';
+import { Home, User, Calendar } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: 'Dashboard', href: '/admin', icon: Home },
+    { name: 'Home', href: '/', icon: Home },
     { name: 'Doctors', href: '/admin/doctors', icon: User },
     { name: 'Appointments', href: '/admin/appointments', icon: Calendar },
-    { name: 'Finances', href: '/admin/finances', icon: DollarSign },
   ];
 
   return (

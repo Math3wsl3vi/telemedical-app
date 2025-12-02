@@ -12,6 +12,7 @@ import { LayoutList, Users, Video, Phone, Clock, Activity } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import EndCallButton from './EndCallButton'
 import Loader from './Loader'
+import DoctorNotesPanel from './DoctorNotesPanel'
 import {
   Dialog,
   DialogContent,
@@ -23,10 +24,17 @@ import { Button } from './ui/button'
 
 type CallLayoutType = 'grid' | 'speaker-left' | 'speaker-right'
 
-const MeetingRoom = () => {
+interface MeetingRoomProps {
+  doctorId?: string | null;
+  isPersonalRoom?: boolean;
+}
+
+const MeetingRoom = ({ doctorId, isPersonalRoom: isPersonalRoomProp }: MeetingRoomProps) => {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const isPersonalRoom = !!searchParams.get('personal');
+  const isPersonalRoom = isPersonalRoomProp ?? !!searchParams.get('personal');
+  const isDoctorView = !!doctorId;
+  const appointmentId = searchParams.get('appointmentId');
   const [layout, setLayout ] = useState<CallLayoutType>('speaker-left')
   const [showParticipants, setShowParticipants ] = useState(false);
   const [isOpen, setIsOpen ] = useState(false)
@@ -39,12 +47,15 @@ const MeetingRoom = () => {
   useEffect(() => {
     if(prevCallState === CallingState.JOINED && callingState !== CallingState.JOINED) {
       const timer = setTimeout(() => {
-        router.push('/medicationConfirm');
+        const url = appointmentId 
+          ? `/medicationConfirm?appointmentId=${appointmentId}`
+          : '/medicationConfirm';
+        router.push(url);
       }, 300);
       return () => clearTimeout(timer);
     }
     setPrevCallState(callingState);
-  }, [callingState, router, prevCallState]);
+  }, [callingState, router, prevCallState, appointmentId]);
 
   if(callingState !== CallingState.JOINED) return <Loader/>
 
@@ -96,18 +107,29 @@ const MeetingRoom = () => {
 
       {/* Main Content Area */}
       <div className="relative flex size-full items-center justify-center pt-20 pb-24">
-        <div className="flex size-full max-w-[1400px] items-center px-4">
+        <div className={cn("flex size-full max-w-[1400px] items-center px-4", {
+          "max-w-[1000px]": isDoctorView
+        })}>
           <CallLayout />
         </div>
         
-        {/* Participants Sidebar */}
-        <div
-          className={cn("h-[calc(100vh-140px)] hidden ml-2 bg-gray-800 border-l border-gray-700", {
-            "show-block": showParticipants,
-          })}
-        >
-          <CallParticipantsList onClose={() => setShowParticipants(false)} />
-        </div>
+        {/* Doctor Notes Panel - Show for doctors */}
+        {isDoctorView && (
+          <div className="w-80 h-[calc(100vh-140px)] flex-shrink-0">
+            <DoctorNotesPanel patientId={undefined} />
+          </div>
+        )}
+        
+        {/* Participants Sidebar - Show for patients */}
+        {!isDoctorView && (
+          <div
+            className={cn("h-[calc(100vh-140px)] hidden ml-2 bg-gray-800 border-l border-gray-700", {
+              "show-block": showParticipants,
+            })}
+          >
+            <CallParticipantsList onClose={() => setShowParticipants(false)} />
+          </div>
+        )}
       </div>
 
       {/* Bottom Control Bar */}
@@ -196,7 +218,10 @@ const MeetingRoom = () => {
             <Button
               onClick={() => {
                 setIsOpen(false)
-                router.push('/medicationConfirm')
+                const url = appointmentId 
+                  ? `/medicationConfirm?appointmentId=${appointmentId}`
+                  : '/medicationConfirm';
+                router.push(url)
               }}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white py-6 text-base font-semibold"
             >

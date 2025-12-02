@@ -137,3 +137,44 @@ export const updateAppointmentPaymentStatus = async (
     throw new Error('Failed to update appointment payment status');
   }
 };
+
+/**
+ * Get all booked appointment times for a specific doctor
+ * Returns ISO string dates of booked appointments
+ */
+export const getBookedTimeSlotsForDoctor = async (doctorId: string): Promise<string[]> => {
+  try {
+    const appointmentsRef = collection(db, 'appointments');
+    const q = query(
+      appointmentsRef,
+      where('doctorId', '==', doctorId),
+      where('status', 'in', ['scheduled', 'confirmed', 'completed'])
+    );
+    const querySnapshot = await getDocs(q);
+
+    const bookedTimes: string[] = [];
+    querySnapshot.forEach((doc) => {
+      const appointmentData = doc.data() as Appointment;
+      if (appointmentData.appointmentDate) {
+        let dateToAdd: Date;
+        
+        // Handle both Timestamp and Date objects
+        if (appointmentData.appointmentDate instanceof Timestamp) {
+          dateToAdd = appointmentData.appointmentDate.toDate();
+        } else if (appointmentData.appointmentDate instanceof Date) {
+          dateToAdd = appointmentData.appointmentDate;
+        } else {
+          return; // Skip if invalid format
+        }
+        
+        bookedTimes.push(dateToAdd.toISOString());
+      }
+    });
+
+    return bookedTimes;
+  } catch (error) {
+    console.error('Error fetching booked time slots for doctor:', error);
+    // Return empty array on error so appointments can still be booked
+    return [];
+  }
+};

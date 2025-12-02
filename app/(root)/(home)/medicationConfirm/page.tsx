@@ -1,10 +1,110 @@
 'use client';
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import Loader from '@/components/Loader';
+import { useToast } from '@/hooks/use-toast';
+
+interface AppointmentData {
+  id: string;
+  patientName: string;
+  patientEmail: string;
+  doctorName: string;
+  doctorSpecialty: string;
+  appointmentDate: Date;
+  description?: string;
+}
 
 const MedicationConfirmationPage: React.FC = () => {
   const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, isLoaded } = useUser();
+  const { toast } = useToast();
+
+  // Fetch appointment data
+  useEffect(() => {
+    const fetchAppointment = async () => {
+      if (!isLoaded || !user) return;
+
+      try {
+        const appointmentId = searchParams.get('appointmentId');
+        let appointmentData: AppointmentData | null = null;
+
+        if (appointmentId) {
+          // Fetch specific appointment
+          const appointmentRef = doc(db, 'appointments', appointmentId);
+          const appointmentSnap = await getDoc(appointmentRef);
+          
+          if (appointmentSnap.exists()) {
+            const data = appointmentSnap.data();
+            appointmentData = {
+              id: appointmentSnap.id,
+              patientName: data.patientName || user.fullName || 'Patient',
+              patientEmail: data.patientEmail || user.primaryEmailAddress?.emailAddress || '',
+              doctorName: data.doctorName,
+              doctorSpecialty: data.doctorSpecialty,
+              appointmentDate: data.appointmentDate?.toDate() || new Date(),
+              description: data.description,
+            };
+          }
+        } else {
+          // Fetch most recent appointment
+          const appointmentsRef = collection(db, 'appointments');
+          const q = query(
+            appointmentsRef,
+            where('patientId', '==', user.id),
+            orderBy('createdAt', 'desc'),
+            limit(1)
+          );
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            const data = querySnapshot.docs[0].data();
+            appointmentData = {
+              id: querySnapshot.docs[0].id,
+              patientName: data.patientName || user.fullName || 'Patient',
+              patientEmail: data.patientEmail || user.primaryEmailAddress?.emailAddress || '',
+              doctorName: data.doctorName,
+              doctorSpecialty: data.doctorSpecialty,
+              appointmentDate: data.appointmentDate?.toDate() || new Date(),
+              description: data.description,
+            };
+          }
+        }
+
+        setAppointment(appointmentData);
+      } catch (error) {
+        console.error('Error fetching appointment:', error);
+        toast({
+          title: "Error",
+          description: "Could not load appointment details.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAppointment();
+  }, [isLoaded, user, searchParams, toast]);
+
+  const handleConfirm = () => {
+    if (appointment) {
+      router.push(`/paymentConfirm?appointmentId=${appointment.id}`);
+    } else {
+      router.push('/paymentConfirm');
+    }
+  };
+
+  if (!isLoaded || loading) {
+    return <Loader />;
+  }
+
   return (
     <div className="min-h-screen">
       {/* Main Content */}
@@ -18,19 +118,21 @@ const MedicationConfirmationPage: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
               <div>
                 <p className="text-gray-500">Patient Name</p>
-                <p className="font-medium text-gray-900">John Doe</p>
+                <p className="font-medium text-gray-900">{appointment?.patientName || user?.fullName || 'Patient'}</p>
               </div>
               <div>
                 <p className="text-gray-500">Appointment ID</p>
-                <p className="font-medium text-gray-900">12345</p>
+                <p className="font-medium text-gray-900">{appointment?.id.slice(-5).toUpperCase() || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-gray-500">Date</p>
-                <p className="font-medium text-gray-900">2024-05-15</p>
+                <p className="font-medium text-gray-900">
+                  {appointment?.appointmentDate.toLocaleDateString() || new Date().toLocaleDateString()}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500">Doctor</p>
-                <p className="font-medium text-gray-900">Dr. Wanjiku Kimani</p>
+                <p className="font-medium text-gray-900">{appointment?.doctorName || 'Dr. Unknown'}</p>
               </div>
             </div>
           </section>
@@ -89,7 +191,7 @@ const MedicationConfirmationPage: React.FC = () => {
 
             <button
               disabled={!confirmed}
-              onClick={() => router.push('/paymentConfirm')}
+              onClick={handleConfirm}
               className={`w-full md:w-auto px-8 py-3 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${!confirmed ? 'disabled:bg-gray-400 disabled:cursor-not-allowed' : ''} transition`}
             >
               Confirm Medication

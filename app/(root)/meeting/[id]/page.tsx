@@ -7,10 +7,16 @@ import { useGetCallById } from '@/hooks/UseGetCallById';
 import { useUser } from '@clerk/nextjs';
 import { StreamCall, StreamTheme } from '@stream-io/video-react-sdk';
 import React, { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
   // Unwrap `params` using React.use
   const { id } = React.use(params);
+  
+  // Get query parameters (doctorId, personal, etc.)
+  const searchParams = useSearchParams();
+  const doctorId = searchParams.get('doctorId');
+  const isPersonalRoom = searchParams.get('personal') === 'true';
 
   const { isLoaded } = useUser();
   const [isSetupComplete, setIsSetupComplete] = useState(false);
@@ -26,7 +32,7 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
           {!isSetupComplete ? (
             <MeetingSetup setIsSetupComplete={setIsSetupComplete} />
           ) : (
-            <MeetingRoom />
+            <MeetingRoom doctorId={doctorId} isPersonalRoom={isPersonalRoom} />
           )}
         </StreamTheme>
       </StreamCall>

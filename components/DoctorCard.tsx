@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { DocData } from "@/constants";
 import useGetDoctors from '@/hooks/useGetDoctors';
-import { saveAppointment } from "@/lib/appointments";
+import { saveAppointment, getBookedTimeSlotsForDoctor } from "@/lib/appointments";
 
 // Enhanced Doctor type with schedule
 type Doctor = {
@@ -60,7 +60,9 @@ interface ServiceCardProps {
 }
 
 // Utility functions for schedule management
-const isDoctorAvailable = (doctor: Doctor, date: Date): boolean => {
+
+// Synchronous check for availability (time-based, without Firestore)
+const isDoctorAvailableSync = (doctor: Doctor, date: Date, bookedSlots: string[]): boolean => {
   const day = date.getDay();
   const time = date.toTimeString().slice(0, 5);
   
@@ -81,8 +83,8 @@ const isDoctorAvailable = (doctor: Doctor, date: Date): boolean => {
   
   if (isBreak) return false;
   
-  // Check if slot is already booked
-  const isBooked = doctor.schedule.bookedSlots.some(bookedSlot => {
+  // Check if slot is already booked (check both doctor's schedule and Firestore appointments)
+  const isBooked = bookedSlots.some(bookedSlot => {
     const bookedDate = new Date(bookedSlot);
     return bookedDate.getTime() === date.getTime();
   });
@@ -92,7 +94,7 @@ const isDoctorAvailable = (doctor: Doctor, date: Date): boolean => {
   return true;
 };
 
-const getAvailableTimeSlots = (doctor: Doctor, date: Date): string[] => {
+const getAvailableTimeSlots = (doctor: Doctor, date: Date, bookedSlots: string[] = []): string[] => {
   if (!doctor.schedule.workingDays.includes(date.getDay())) {
     return [];
   }
@@ -109,8 +111,11 @@ const getAvailableTimeSlots = (doctor: Doctor, date: Date): string[] => {
   
   const currentTime = new Date(startTime);
   
+  // Combine doctor's schedule bookedSlots with Firestore appointments
+  const allBookedSlots = [...doctor.schedule.bookedSlots, ...bookedSlots];
+  
   while (currentTime < endTime) {
-    if (isDoctorAvailable(doctor, new Date(currentTime))) {
+    if (isDoctorAvailableSync(doctor, new Date(currentTime), allBookedSlots)) {
       slots.push(currentTime.toTimeString().slice(0, 5));
     }
     currentTime.setMinutes(currentTime.getMinutes() + 30); // 30-minute slots
@@ -174,6 +179,8 @@ const DoctorCard = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [polling, setPolling] = useState(false);
   const [isPaymentSuccessful, setIsPaymentSuccessful] = useState(false);
+  const [firestoreBookedSlots, setFirestoreBookedSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const router = useRouter();
   const { user } = useUser();
@@ -249,6 +256,27 @@ const DoctorCard = () => {
     setIsOpen(false);
   };
 
+  // Fetch booked slots from Firestore when date changes
+  const fetchBookedSlots = async (doctor: Doctor) => {
+    setLoadingSlots(true);
+    try {
+      const slots = await getBookedTimeSlotsForDoctor(doctor.id);
+      setFirestoreBookedSlots(slots);
+    } catch (error) {
+      console.error('Error fetching booked slots:', error);
+      setFirestoreBookedSlots([]);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  const handleDateChange = async (date: Date | null) => {
+    setSelectedDate(date);
+    if (date && selectedDoctor) {
+      await fetchBookedSlots(selectedDoctor);
+    }
+  };
+
   const handleSchedule = () => {
     if (!selectedDoctor || !selectedDate || !selectedTime) {
       toast({ title: "Please select date and time", variant: "destructive" });
@@ -299,8 +327,9 @@ const DoctorCard = () => {
       appointmentDateTime.setHours(hours, minutes, 0, 0);
 
       // Save appointment to Firestore
+      let appointmentId: string | undefined;
       try {
-        await saveAppointment({
+        appointmentId = await saveAppointment({
           patientId: user.id,
           patientName: user.fullName || undefined,
           patientEmail: user.primaryEmailAddress?.emailAddress || undefined,
@@ -315,7 +344,7 @@ const DoctorCard = () => {
           phoneNumber: phoneNumber || undefined,
           status: 'scheduled',
         });
-        console.log('✅ Appointment saved successfully');
+        console.log('✅ Appointment saved successfully with ID:', appointmentId);
       } catch (appointmentError) {
         console.error('⚠️ Failed to save appointment to Firestore:', appointmentError);
         toast({ title: "Warning: Could not save appointment details, but continuing with meeting...", variant: "destructive" });
@@ -329,12 +358,15 @@ const DoctorCard = () => {
         toast({ title: "Room created successfully!" });
       }
 
+      // Create a doctor-specific meeting link with doctorId parameter
+      const doctorMeetingLink = `${meetingLink}&doctorId=${selectedDoctor.id}`;
+      
       const whatsappMessage = `Hello ${selectedDoctor.name},
 
 A patient has requested an emergency meeting. Kindly join as soon as possible. The patient is already on the call waiting.
       
 👉 Click here to join:
-${meetingLink.startsWith('http') ? meetingLink : `https://${meetingLink}`}
+${doctorMeetingLink.startsWith('http') ? doctorMeetingLink : `https://${doctorMeetingLink}`}
       
 Please join as soon as possible.`;
 
@@ -356,7 +388,7 @@ Please join as soon as possible.`;
         console.warn("Failed to send WhatsApp message");
       }
 
-      router.push(`/meeting/${meetingId}?personal=true`);
+      router.push(`/meeting/${meetingId}?personal=true${appointmentId ? `&appointmentId=${appointmentId}` : ''}`);
     } catch (error) {
       console.error("Error starting the room:", error);
       toast({ title: "An error occurred while starting the room.", variant: "destructive" });
@@ -534,13 +566,13 @@ Please join as soon as possible.`;
   // Get available time slots for selected doctor and date
   const availableTimeSlots = useMemo(() => {
     if (!selectedDoctor || !selectedDate) return [];
-    return getAvailableTimeSlots(selectedDoctor, selectedDate);
-  }, [selectedDoctor, selectedDate]);
+    return getAvailableTimeSlots(selectedDoctor, selectedDate, firestoreBookedSlots);
+  }, [selectedDoctor, selectedDate, firestoreBookedSlots]);
 
   // Check if current date has available slots
   const hasAvailableSlotsToday = (doctor: Doctor) => {
     const today = new Date();
-    return getAvailableTimeSlots(doctor, today).length > 0;
+    return getAvailableTimeSlots(doctor, today, firestoreBookedSlots).length > 0;
   };
 
   return (
@@ -728,7 +760,7 @@ Please join as soon as possible.`;
                 <ReactDatePicker
                   selected={selectedDate}
                   onChange={(date) => {
-                    setSelectedDate(date);
+                    handleDateChange(date);
                     setSelectedTime("");
                   }}
                   minDate={new Date()}
@@ -769,7 +801,13 @@ Please join as soon as possible.`;
                   Available Time Slots {selectedDate && `for ${selectedDate.toLocaleDateString()}`}
                 </h3>
                 <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto p-2">
-                  {availableTimeSlots.map((time) => (
+                  {loadingSlots && selectedDate && (
+                    <div className="col-span-2 text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                      <div className="animate-spin inline-block w-6 h-6 border-3 border-gray-300 border-t-green-600 rounded-full"></div>
+                      <p className="mt-2">Loading available slots...</p>
+                    </div>
+                  )}
+                  {!loadingSlots && availableTimeSlots.map((time) => (
                     <button
                       key={time}
                       onClick={() => setSelectedTime(time)}
@@ -782,7 +820,7 @@ Please join as soon as possible.`;
                       {time}
                     </button>
                   ))}
-                  {availableTimeSlots.length === 0 && selectedDate && (
+                  {!loadingSlots && availableTimeSlots.length === 0 && selectedDate && (
                     <div className="col-span-2 text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                       <Clock className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                       <p>No available slots for this date</p>

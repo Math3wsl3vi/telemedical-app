@@ -116,7 +116,11 @@ const MeetingRoom = ({ doctorId, isPersonalRoom: isPersonalRoomProp }: MeetingRo
         {/* Doctor Notes Panel - Show for doctors */}
         {isDoctorView && (
           <div className="w-80 h-[calc(100vh-140px)] flex-shrink-0">
-            <DoctorNotesPanel patientId={undefined} />
+            <DoctorNotesPanel 
+              patientId={undefined} 
+              appointmentId={appointmentId || undefined}
+              doctorId={doctorId || undefined}
+            />
           </div>
         )}
         

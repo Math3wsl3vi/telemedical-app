@@ -6,6 +6,7 @@ import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from '
 import { db } from '@/lib/firebase';
 import Loader from '@/components/Loader';
 import { useToast } from '@/hooks/use-toast';
+import { Medication, DoctorNote } from '@/lib/appointments';
 
 interface AppointmentData {
   id: string;
@@ -15,6 +16,11 @@ interface AppointmentData {
   doctorSpecialty: string;
   appointmentDate: Date;
   description?: string;
+  prescription?: {
+    medications: Medication[];
+    notes: DoctorNote[];
+    prescribedAt?: Date;
+  };
 }
 
 const MedicationConfirmationPage: React.FC = () => {
@@ -50,6 +56,19 @@ const MedicationConfirmationPage: React.FC = () => {
               doctorSpecialty: data.doctorSpecialty,
               appointmentDate: data.appointmentDate?.toDate() || new Date(),
               description: data.description,
+              prescription: data.prescription ? {
+                medications: data.prescription.medications || [],
+                notes: data.prescription.notes?.map((note: {
+                  id: string;
+                  content: string;
+                  type: string;
+                  timestamp: {toDate?: () => Date} | Date;
+                }) => ({
+                  ...note,
+                  timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
+                })) || [],
+                prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
+              } : undefined,
             };
           }
         } else {
@@ -73,6 +92,19 @@ const MedicationConfirmationPage: React.FC = () => {
               doctorSpecialty: data.doctorSpecialty,
               appointmentDate: data.appointmentDate?.toDate() || new Date(),
               description: data.description,
+              prescription: data.prescription ? {
+                medications: data.prescription.medications || [],
+                notes: data.prescription.notes?.map((note: {
+                  id: string;
+                  content: string;
+                  type: string;
+                  timestamp: {toDate?: () => Date} | Date;
+                }) => ({
+                  ...note,
+                  timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
+                })) || [],
+                prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
+              } : undefined,
             };
           }
         }
@@ -141,36 +173,75 @@ const MedicationConfirmationPage: React.FC = () => {
           <section className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-medium text-gray-700">Prescribed Medication</h3>
-              <span className="px-3 py-1 bg-orange-100 text-orange-700 text-sm font-medium rounded-full flex items-center gap-2">
-                <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
-                Pending
+              <span className={`px-3 py-1 ${appointment?.prescription ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'} text-sm font-medium rounded-full flex items-center gap-2`}>
+                <span className={`w-2 h-2 ${appointment?.prescription ? 'bg-green-500' : 'bg-orange-500 animate-pulse'} rounded-full`}></span>
+                {appointment?.prescription ? 'Prescribed' : 'Pending'}
               </span>
             </div>
 
-            <div className="space-y-4 bg-gray-50 p-5 rounded-lg">
-              <div className="bg-white p-4 rounded border border-gray-200">
-                <p className="font-medium text-gray-900">
-                  Amoxicillin, 500mg, 3 times daily, 7 days
-                </p>
+            {appointment?.prescription && appointment.prescription.medications.length > 0 ? (
+              <div className="space-y-4 bg-gray-50 p-5 rounded-lg">
+                {appointment.prescription.medications.map((med) => (
+                  <div key={med.id} className="bg-white p-4 rounded border border-gray-200">
+                    <p className="font-medium text-gray-900">
+                      {med.name} - {med.strength}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Dosage: {med.dosage}
+                    </p>
+                    <div className="flex gap-4 text-xs text-gray-500 mt-2">
+                      <span>Duration: {med.duration}</span>
+                      <span>Quantity: {med.quantity}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="bg-white p-4 rounded border border-gray-200">
-                <p className="font-medium text-gray-900">
-                  Ibuprofen, 400mg, as needed for pain
-                </p>
+            ) : (
+              <div className="space-y-4 bg-gray-50 p-5 rounded-lg">
+                <div className="bg-white p-4 rounded border border-gray-200">
+                  <p className="font-medium text-gray-900">
+                    Amoxicillin, 500mg, 3 times daily, 7 days
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded border border-gray-200">
+                  <p className="font-medium text-gray-900">
+                    Ibuprofen, 400mg, as needed for pain
+                  </p>
+                </div>
+                <p className="text-sm text-gray-500 text-center pt-2">Sample medications (Doctor has not prescribed yet)</p>
               </div>
-            </div>
+            )}
 
             {/* Doctor's Notes */}
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
               {"Doctor's"} Notes
               </label>
-              <textarea
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
-                defaultValue="Patient is advised to complete full course of antibiotics."
-                readOnly
-              />
+              <div className="w-full px-4 py-3 border border-gray-300 rounded-md bg-gray-50">
+                {appointment?.prescription && appointment.prescription.notes.length > 0 ? (
+                  <div className="space-y-3">
+                    {appointment.prescription.notes.map((note) => (
+                      <div key={note.id} className="pb-3 border-b last:border-b-0 last:pb-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${
+                            note.type === 'diagnosis' ? 'bg-red-100 text-red-700' :
+                            note.type === 'plan' ? 'bg-blue-100 text-blue-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {note.type}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {note.timestamp instanceof Date ? note.timestamp.toLocaleTimeString() : ''}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700">{note.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-600">Patient is advised to complete full course of antibiotics.</p>
+                )}
+              </div>
             </div>
           </section>
 

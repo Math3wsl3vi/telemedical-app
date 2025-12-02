@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, Timestamp } from 'firebase/firestore';
 
 export interface Appointment {
   patientId: string;
@@ -17,6 +17,32 @@ export interface Appointment {
   status: 'scheduled' | 'completed' | 'cancelled';
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  prescription?: Prescription;
+}
+
+export interface Medication {
+  id: string;
+  name: string;
+  strength: string;
+  dosage: string;
+  duration: string;
+  quantity: string;
+  price?: number;
+}
+
+export interface DoctorNote {
+  id: string;
+  timestamp: Date | Timestamp;
+  content: string;
+  type: 'diagnosis' | 'observation' | 'plan';
+}
+
+export interface Prescription {
+  medications: Medication[];
+  notes: DoctorNote[];
+  doctorNotes?: string;
+  prescribedAt?: Timestamp;
+  prescribedBy?: string;
 }
 
 /**
@@ -176,5 +202,61 @@ export const getBookedTimeSlotsForDoctor = async (doctorId: string): Promise<str
     console.error('Error fetching booked time slots for doctor:', error);
     // Return empty array on error so appointments can still be booked
     return [];
+  }
+};
+
+/**
+ * Save or update prescription for an appointment
+ */
+export const savePrescription = async (
+  appointmentId: string,
+  prescription: Prescription,
+  doctorId: string
+): Promise<void> => {
+  try {
+    const appointmentRef = doc(db, 'appointments', appointmentId);
+    
+    // Convert any Date objects in notes to Timestamps
+    const prescriptionData = {
+      ...prescription,
+      notes: prescription.notes.map(note => ({
+        ...note,
+        timestamp: note.timestamp instanceof Date 
+          ? Timestamp.fromDate(note.timestamp)
+          : note.timestamp
+      })),
+      prescribedAt: Timestamp.now(),
+      prescribedBy: doctorId,
+    };
+    
+    await updateDoc(appointmentRef, {
+      prescription: prescriptionData,
+      updatedAt: Timestamp.now(),
+    });
+    
+    console.log('Prescription saved successfully for appointment:', appointmentId);
+  } catch (error) {
+    console.error('Error saving prescription:', error);
+    throw new Error('Failed to save prescription');
+  }
+};
+
+/**
+ * Get prescription for an appointment
+ */
+export const getPrescription = async (appointmentId: string): Promise<Prescription | null> => {
+  try {
+    const appointmentRef = doc(db, 'appointments', appointmentId);
+    const appointmentSnap = await getDoc(appointmentRef);
+    
+    if (appointmentSnap.exists()) {
+      const data = appointmentSnap.data();
+      return data.prescription || null;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching prescription:', error);
+    throw new Error('Failed to fetch prescription');
   }
 };

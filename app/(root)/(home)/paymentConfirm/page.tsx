@@ -29,6 +29,24 @@ interface AppointmentData {
   appointmentDate: Date;
   description?: string;
   phoneNumber?: string;
+  prescription?: {
+    medications: Array<{
+      id: string;
+      name: string;
+      strength: string;
+      dosage: string;
+      duration: string;
+      quantity: string;
+      price?: number;
+    }>;
+    notes: Array<{
+      id: string;
+      content: string;
+      type: string;
+      timestamp: Date;
+    }>;
+    prescribedAt?: Date;
+  };
 }
 
 interface DoctorData {
@@ -53,9 +71,12 @@ const PaymentConfirmationPage: React.FC = () => {
   const [doctor, setDoctor] = useState<DoctorData | null>(null);
   // In the future, medications can be fetched from Firestore or passed via props
   // For now, using default mock medications
-  const medications: Medication[] = [
-    { name: "Amoxicillin", strength: "500mg Capsules", dosage: "1 capsule three times daily", duration: "7 days", quantity: "21 capsules", price: 1500 },
-    { name: "Ibuprofen", strength: "400mg Tablets", dosage: "1 tablet three times daily when in pain", duration: "As needed", quantity: "30 tablets", price: 1000 },
+  const medications: Medication[] = appointment?.prescription?.medications.map(med => ({
+    ...med,
+    price: med.price || 1000, // Default price if not set
+  })) || [
+    { name: "Amoxicillin", strength: "500mg Capsules", dosage: "1 capsule three times daily", duration: "7 days", quantity: "21 capsules", price: 1500, id: '1' },
+    { name: "Ibuprofen", strength: "400mg Tablets", dosage: "1 tablet three times daily when in pain", duration: "As needed", quantity: "30 tablets", price: 1000, id: '2' },
   ];
 
   const totalAmount = medications.reduce((sum, med) => sum + med.price, 0);
@@ -89,6 +110,19 @@ const PaymentConfirmationPage: React.FC = () => {
               appointmentDate: data.appointmentDate?.toDate() || new Date(),
               description: data.description,
               phoneNumber: data.phoneNumber,
+              prescription: data.prescription ? {
+                medications: data.prescription.medications || [],
+                notes: data.prescription.notes?.map((note: {
+                  id: string;
+                  content: string;
+                  type: string;
+                  timestamp: {toDate?: () => Date} | Date;
+                }) => ({
+                  ...note,
+                  timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
+                })) || [],
+                prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
+              } : undefined,
             };
           }
         } else {
@@ -115,6 +149,19 @@ const PaymentConfirmationPage: React.FC = () => {
               appointmentDate: data.appointmentDate?.toDate() || new Date(),
               description: data.description,
               phoneNumber: data.phoneNumber,
+              prescription: data.prescription ? {
+                medications: data.prescription.medications || [],
+                notes: data.prescription.notes?.map((note: {
+                  id: string;
+                  content: string;
+                  type: string;
+                  timestamp: {toDate?: () => Date} | Date;
+                }) => ({
+                  ...note,
+                  timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
+                })) || [],
+                prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
+              } : undefined,
             };
           }
         }

@@ -26,6 +26,8 @@ import {
   Users
 } from 'lucide-react';
 import { DocData } from "@/constants";
+import useGetDoctors from '@/hooks/useGetDoctors';
+import { saveAppointment } from "@/lib/appointments";
 
 // Enhanced Doctor type with schedule
 type Doctor = {
@@ -169,6 +171,9 @@ const DoctorCard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("All Specialties");
   const [doctors, setDoctors] = useState<Doctor[]>(DocData);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [polling, setPolling] = useState(false);
+  const [isPaymentSuccessful, setIsPaymentSuccessful] = useState(false);
 
   const router = useRouter();
   const { user } = useUser();
@@ -176,6 +181,58 @@ const DoctorCard = () => {
   const client = useStreamVideoClient();
   const { toast } = useToast();
   const { call } = useGetCallById(meetingId!);
+
+  // Fetch doctors from Firestore and map to the local Doctor shape
+  const { doctors: fetchedDoctors } = useGetDoctors();
+
+  React.useEffect(() => {
+    if (!fetchedDoctors || fetchedDoctors.length === 0) return;
+
+    const mapped = fetchedDoctors.map(fd => {
+      const sched = (fd.schedule ?? {}) as Record<string, unknown>;
+      const bookedSlotsRaw = (sched.bookedSlots ?? []) as unknown[];
+
+      const bookedSlots = bookedSlotsRaw.map((s: unknown) => {
+        if (typeof s === 'string') return s;
+        if (s && typeof (s as { toDate?: unknown }).toDate === 'function') {
+          const d = (s as { toDate: () => Date }).toDate();
+          return d.toISOString();
+        }
+        // If Firestore Timestamp-like object with seconds/nanoseconds
+        if (s && typeof (s as Record<string, unknown>).seconds === 'number') {
+          const seconds = (s as { seconds: number }).seconds;
+          return new Date(seconds * 1000).toISOString();
+        }
+        return String(s ?? '');
+      });
+
+      // derive specialty/spec reliably without using `any`
+      const specialtyField = (fd as Record<string, unknown>).specialty;
+      const specField = (fd as Record<string, unknown>).spec;
+      const spec = typeof specialtyField === 'string'
+        ? specialtyField
+        : (typeof specField === 'string' ? specField : '');
+
+      return {
+        id: fd.id,
+        name: (fd.name as string) ?? '',
+        spec,
+        img: (fd.img as string) ?? (DocData[0] && DocData[0].img) ?? '',
+        whatsappNumber: (fd.whatsappNumber as string) ?? '',
+        schedule: {
+          workingHours: {
+            start: (sched.workingHours as Record<string, unknown>)?.start as string ?? '08:00',
+            end: (sched.workingHours as Record<string, unknown>)?.end as string ?? '16:00'
+          },
+          workingDays: (sched.workingDays as number[]) ?? [1,2,3,4,5],
+           breaks: (sched.breaks as { start: string; end: string; days: number[] }[]) ?? [{ start: '12:00', end: '13:00', days: [1,2,3,4,5] }],
+          bookedSlots: bookedSlots
+        }
+      } as Doctor;
+    });
+
+    setDoctors(mapped);
+  }, [fetchedDoctors]);
 
   const meetingLink = `${
     process.env.NEXT_PUBLIC_BASE_URL
@@ -230,12 +287,40 @@ const DoctorCard = () => {
   };
 
   const startRoom = async () => {
-    if (!client || !user || !selectedDoctor) {
+    if (!client || !user || !selectedDoctor || !selectedDate || !selectedTime) {
       toast({ title: "Missing information to start the room.", variant: "destructive" });
       return;
     }
 
     try {
+      // Create the final datetime for the appointment
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const appointmentDateTime = new Date(selectedDate);
+      appointmentDateTime.setHours(hours, minutes, 0, 0);
+
+      // Save appointment to Firestore
+      try {
+        await saveAppointment({
+          patientId: user.id,
+          patientName: user.fullName || undefined,
+          patientEmail: user.primaryEmailAddress?.emailAddress || undefined,
+          doctorId: selectedDoctor.id,
+          doctorName: selectedDoctor.name,
+          doctorSpecialty: selectedDoctor.spec,
+          appointmentDate: appointmentDateTime,
+          meetingId: meetingId!,
+          meetingLink: meetingLink.startsWith('http') ? meetingLink : `https://${meetingLink}`,
+          description: values.description || undefined,
+          paymentStatus: isPaymentSuccessful ? 'completed' : 'pending',
+          phoneNumber: phoneNumber || undefined,
+          status: 'scheduled',
+        });
+        console.log('✅ Appointment saved successfully');
+      } catch (appointmentError) {
+        console.error('⚠️ Failed to save appointment to Firestore:', appointmentError);
+        toast({ title: "Warning: Could not save appointment details, but continuing with meeting...", variant: "destructive" });
+      }
+
       if (!call) {
         const newCall = client.call("default", meetingId!);
         await newCall.getOrCreate({
@@ -246,7 +331,7 @@ const DoctorCard = () => {
 
       const whatsappMessage = `Hello ${selectedDoctor.name},
 
-Your meeting is ready to start. The patient is already on the call waiting.
+A patient has requested an emergency meeting. Kindly join as soon as possible. The patient is already on the call waiting.
       
 👉 Click here to join:
 ${meetingLink.startsWith('http') ? meetingLink : `https://${meetingLink}`}
@@ -259,11 +344,16 @@ Please join as soon as possible.`;
         body: JSON.stringify({ to: selectedDoctor.whatsappNumber, message: whatsappMessage }),
       });
 
-      const result = await response.json();
+      let result: { success?: boolean } = {};
+      try {
+        result = await response.json();
+      } catch {
+        result = {};
+      }
       if (result.success) {
-        toast({ title: "Appointment Request Sent .A doctor will be with you shortly" });
+        toast({ title: "Appointment Request Sent. A doctor will be with you shortly" });
       } else {
-        toast({ title: "Failed to send WhatsApp message.", variant: "destructive" });
+        console.warn("Failed to send WhatsApp message");
       }
 
       router.push(`/meeting/${meetingId}?personal=true`);
@@ -272,7 +362,138 @@ Please join as soon as possible.`;
       toast({ title: "An error occurred while starting the room.", variant: "destructive" });
     }
   };
+  const startPolling = (checkoutRequestID: string) => {
+    if (polling) return;
+    setPolling(true);
+    
+    let pollCount = 0;
+    const maxPolls = 12; // 12 * 10000ms = 2 minutes max polling time (respects M-Pesa rate limit of 5 req/min)
+    const pollInterval = 10000; // 10 seconds (2 requests per 20 seconds = well under 5 per minute limit)
+    
+    const interval = setInterval(async () => {
+      pollCount++;
+      
+      try {
+        const response = await fetch("/api/mpesa/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ checkoutRequestID }),
+        });
+        const data = await response.json();
+        
+        console.log(`Poll #${pollCount}: Status = ${data.status}`);
+        
+        if (data.status === "COMPLETED") {
+          clearInterval(interval);
+          setPolling(false);
+          setIsPaymentSuccessful(true);
+          toast({ description: "Payment confirmed!" });
+        } else if (data.status === "FAILED") {
+          clearInterval(interval);
+          setPolling(false);
+          setIsPaymentSuccessful(false);
+          toast({ description: "Payment failed. Please try again." });
+        } else if (data.error) {
+          // If there's an error response from the API
+          console.warn(`Poll #${pollCount} - API Error:`, data.error);
+          
+          if (pollCount >= maxPolls) {
+            clearInterval(interval);
+            setPolling(false);
+            // Allow user to continue even if payment verification fails due to API issues
+            setIsPaymentSuccessful(false);
+            toast({ 
+              title: "Payment verification unavailable",
+              description: "Due to connectivity issues, you can continue with pending payment status. Please ensure payment is completed on your phone." 
+            });
+          }
+        } else if (pollCount >= maxPolls) {
+          // Stop polling after max attempts
+          clearInterval(interval);
+          setPolling(false);
+          setIsPaymentSuccessful(false);
+          toast({ 
+            description: "Payment verification timed out. Please check your phone for the STK push prompt and try again." 
+          });
+        }
+      } catch (error) {
+        console.error(`Polling error on attempt ${pollCount}:`, error);
+        
+        // Stop polling if we hit max attempts
+        if (pollCount >= maxPolls) {
+          clearInterval(interval);
+          setPolling(false);
+          setIsPaymentSuccessful(false);
+          toast({ 
+            title: "Payment verification unavailable",
+            description: "Could not verify payment due to connectivity issues. Your appointment will be saved with pending payment status." 
+          });
+        }
+      }
+    }, pollInterval);
+  };
 
+    const handlePayment = async () => {
+    if (!phoneNumber) {
+      toast({ description: "Please enter your phone number." });
+      return;
+    }
+    let formattedPhone = phoneNumber.trim();
+    if (formattedPhone.startsWith("07") || formattedPhone.startsWith("01")) {
+      formattedPhone = "254" + formattedPhone.slice(1);
+    }
+    if (!/^254(7|1)\d{8}$/.test(formattedPhone)) {
+      toast({ description: "Invalid phone number. Use format 07XXXXXXXX or 01XXXXXXXX." });
+      return;
+    }
+    
+    // Check if using mock/demo mode for testing (when M-Pesa API is unavailable)
+    const useMockPayment = process.env.NEXT_PUBLIC_MOCK_PAYMENT === 'true';
+    
+    if (useMockPayment) {
+      // Mock payment mode - simulates successful payment for testing
+      setPolling(true);
+      toast({ description: "🔧 DEMO MODE: Simulating payment (M-Pesa unavailable)..." });
+      
+      // Simulate payment processing with a 3-second delay
+      setTimeout(() => {
+        setPolling(false);
+        setIsPaymentSuccessful(true);
+        toast({ 
+          title: "✅ Demo Payment Successful",
+          description: "Payment simulation complete. You can now proceed with appointment booking.",
+        });
+      }, 3000);
+      return;
+    }
+    
+    try {
+      const response = await fetch("/api/mpesa/stkpush", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: formattedPhone,
+          amount: 1, // Set a fixed amount or use appointment fee
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast({ description: "Payment initiated. Waiting for confirmation..." });
+        setPolling(true);
+        startPolling(data.CheckoutRequestID);
+      } else {
+        toast({ description: "Failed to initiate payment. Please try again." });
+        console.error("Error:", data);
+      }
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast({ 
+        description: "Payment error. If this persists, try DEMO MODE or contact support.",
+        variant: "destructive" 
+      });
+    }
+  };
+      
   const services = [
     { title: 'Total Doctors', icon: <Stethoscope className="w-6 h-6" />, count: doctors.length.toString() },
     { title: 'Available Today', icon: <Users className="w-6 h-6" />, count: doctors.filter(doc => 
@@ -662,24 +883,63 @@ Please join as soon as possible.`;
               </p>
             </div>
           )}
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full">
-            <Button
-              onClick={startRoom}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-6"
-            >
-              Request Appointment Now
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1 border-2 border-gray-300 hover:bg-gray-50 py-6 font-semibold"
-              onClick={() => {
-                navigator.clipboard.writeText(meetingLink);
-                toast({ title: "Link Copied" });
-              }}
-            >
-              Copy Invite Link
-            </Button>
-          </div>
+          
+          {/* Payment Section - Show before payment is successful */}
+          {!isPaymentSuccessful && (
+            <div className="mt-6 w-full flex flex-col gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Phone Number for Payment</label>
+                <input
+                  type="text"
+                  placeholder="Enter phone number (e.g. 07XXXXXXXX)"
+                  value={phoneNumber}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-green-600"
+                  disabled={polling}
+                />
+              </div>
+              <Button
+                onClick={handlePayment}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-6"
+                disabled={polling}
+              >
+                {polling ? "Processing Payment..." : "Pay Now"}
+              </Button>
+              {polling && (
+                <p className="text-center text-sm text-gray-600">Waiting for payment confirmation...</p>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons - Show after payment is successful */}
+          {isPaymentSuccessful && (
+            <>
+              <div className="mt-6 w-full bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <div className="text-green-600">✓</div>
+                  <p className="text-green-700 font-semibold">Payment Successful!</p>
+                </div>
+              </div>
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full">
+                <Button
+                  onClick={startRoom}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-6"
+                >
+                  Request Appointment Now
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-2 border-gray-300 hover:bg-gray-50 py-6 font-semibold"
+                  onClick={() => {
+                    navigator.clipboard.writeText(meetingLink);
+                    toast({ title: "Link Copied" });
+                  }}
+                >
+                  Copy Invite Link
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -66,7 +66,7 @@ export const DocData = [
     name: 'Dr. Wanjiku Kimani',
     spec: 'Dermatologist',
     img: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271815',
+    whatsappNumber: '+254111971600',
     schedule: {
       workingHours: { start: "08:00", end: "16:00" },
       workingDays: [1, 2, 3, 4, 5],
@@ -85,7 +85,7 @@ export const DocData = [
     name: 'Dr. Mercy Atieno',
     spec: 'Dermatologist',
     img: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271816',
+    whatsappNumber: '+254111971600',
     schedule: {
       workingHours: { start: "08:00", end: "16:00" },
       workingDays: [1, 2, 3, 4, 5],
@@ -102,7 +102,7 @@ export const DocData = [
     name: 'Dr. Brian Mwende',
     spec: 'Dermatologist',
     img: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271817',
+    whatsappNumber: '+254717271815',
     schedule: {
       workingHours: { start: "08:00", end: "16:00" },
       workingDays: [1, 2, 3, 4, 5],
@@ -121,7 +121,7 @@ export const DocData = [
     name: 'Dr. Omondi Oduor',
     spec: 'Psychiatrist',
     img: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271818',
+    whatsappNumber: '+254717271815',
     schedule: {
       workingHours: { start: "09:00", end: "17:00" },
       workingDays: [1, 2, 3, 4, 5],
@@ -138,7 +138,7 @@ export const DocData = [
     name: 'Dr. Alice Wairimu',
     spec: 'Psychologist',
     img: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271819',
+    whatsappNumber: '+254717271815',
     schedule: {
       workingHours: { start: "09:00", end: "16:00" },
       workingDays: [1, 2, 3, 4, 5],
@@ -155,7 +155,7 @@ export const DocData = [
     name: 'Dr. Kevin Otieno',
     spec: 'Counseling Psychologist',
     img: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271820',
+    whatsappNumber: '+254717271815',
     schedule: {
       workingHours: { start: "10:00", end: "18:00" },
       workingDays: [1, 2, 3, 4, 5],
@@ -174,7 +174,7 @@ export const DocData = [
     name: 'Dr. Mwangi Njoroge',
     spec: 'Pediatrician',
     img: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&h=400&fit=crop',
-    whatsappNumber: '+254717271821',
+    whatsappNumber: '+254717271815',
     schedule: {
       workingHours: { start: "08:00", end: "15:00" },
       workingDays: [1, 2, 3, 4, 5],

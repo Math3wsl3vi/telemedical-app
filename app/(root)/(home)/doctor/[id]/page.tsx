@@ -1,209 +1,225 @@
+// app/doctor/[id]/page.tsx
 "use client";
 
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Image from "next/image";
-import React from "react";
-import { DocData } from "@/constants";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Calendar, 
-  Clock, 
-  Users, 
-  Bell, 
-  ChevronRight, 
-  HeartPulse, 
-  Brain, 
-  Stethoscope, 
+import {
+  Calendar,
+  Clock,
+  Users,
+  Bell,
+  ChevronRight,
+  HeartPulse,
+  Brain,
+  Stethoscope,
   Baby,
   MapPin,
-  Phone
-} from 'lucide-react';
-import { useRouter } from "next/navigation";
-import { use } from "react";
+  Phone,
+} from "lucide-react";
 
-export interface DoctorData {
+interface Doctor {
   id: string;
   name: string;
-  img: string;
-  spec: string;
-  whatsappNumber: string;
-}
-
-interface ServiceCardProps {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-}
-
-const ServiceCard = ({ title, description, icon, onClick }: ServiceCardProps) => (
-  <Card 
-    className="p-6 hover:shadow-lg transition-all cursor-pointer border-l-[3px] border-l-green-600 bg-white hover:bg-green-50"
-    onClick={onClick}
-  >
-    <div className="flex items-center justify-between">
-      <div className="flex-1">
-        <p className="text-base font-semibold text-gray-900 mb-2">{title}</p>
-        <p className="text-sm text-gray-600 leading-relaxed">{description}</p>
-      </div>
-      <div className="text-green-600 bg-green-100 p-3 ml-4">
-        {icon}
-      </div>
-    </div>
-  </Card>
-);
-
-interface AppointmentCardProps {
-  patientName: string;
   specialty: string;
-  date: string;
-  time: string;
-  status: string;
+  img: string;
+  phone: string;
+  whatsappNumber: string;
+  experience_years: number;
+  clinic: string;
+  schedule: {
+    workingDays: number[];
+    workingHours: { start: string; end: string };
+    breaks: Array<{ days: number[]; start: string; end: string }>;
+  };
 }
 
-const AppointmentCard = ({ patientName, specialty, date, time, status }: AppointmentCardProps) => (
-  <Card className="p-5 border border-gray-200 hover:border-green-300 transition-colors">
-    <div className="flex justify-between items-start">
-      <div className="flex-1">
-        <h3 className="font-semibold text-gray-900 text-base mb-1">{patientName}</h3>
-        <p className="text-sm text-gray-700 mb-2">{specialty}</p>
-        <div className="flex items-center text-sm text-gray-600 space-x-4">
-          <span className="flex items-center">
-            <Calendar className="h-4 w-4 mr-1" />
-            {date}
-          </span>
-          <span className="flex items-center">
-            <Clock className="h-4 w-4 mr-1" />
-            {time}
-          </span>
-        </div>
+interface Appointment {
+  id: string;
+  appointmentDate: Timestamp; // Firestore Timestamp
+  patientName: string;
+  patientEmail: string;
+  status: string;
+  meetingLink?: string;
+  doctorSpecialty?: string;
+}
+
+export default function DoctorPage() {
+  const { id } = useParams() as { id: string };
+  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchData = async () => {
+      try {
+        // === Fetch Doctor ===
+        // Prefer top-level `doctors` collection (used elsewhere in the app). If not
+        // found there, fall back to searching clinic subcollections (older structure).
+  const doctorRef = doc(db, "doctors", id);
+        let doctorSnap = await getDoc(doctorRef);
+
+        if (!doctorSnap.exists()) {
+          // Fallback: iterate clinics and look for the doctor inside clinics/{clinicId}/doctors/{id}
+          try {
+            const clinicsSnapshot = await getDocs(collection(db, "clinics"));
+            for (const clinicDoc of clinicsSnapshot.docs) {
+              const candidateRef = doc(db, "clinics", clinicDoc.id, "doctors", id);
+              const candidateSnap = await getDoc(candidateRef);
+              if (candidateSnap.exists()) {
+                doctorSnap = candidateSnap;
+                break;
+              }
+            }
+          } catch (fallbackErr) {
+            console.warn("Error while searching clinics fallback:", fallbackErr);
+          }
+        }
+
+        if (!doctorSnap.exists()) {
+          // Not found in any expected location
+          setLoading(false);
+          return;
+        }
+
+        const docData = { id: doctorSnap.id, ...doctorSnap.data() } as Doctor;
+        setDoctor(docData);
+
+        // === Fetch Appointments ===
+        const apptsQuery = query(
+          collection(db, "appointments"),
+          where("doctorId", "==", id),
+          where("status", "in", ["scheduled", "confirmed", "completed"]),
+          orderBy("appointmentDate", "asc")
+        );
+
+        const apptSnapshot = await getDocs(apptsQuery);
+        const appts = apptSnapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as Appointment[];
+
+        setAppointments(appts);
+      } catch (err) {
+        console.error("Error loading doctor/appointments:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id]);
+
+  // Format Firestore Timestamp
+  const formatDate = (timestamp: Timestamp) => {
+    if (!timestamp) return "—";
+    const date = timestamp.toDate();
+    return date.toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const formatTime = (timestamp: Timestamp) => {
+    if (!timestamp) return "—";
+    return timestamp.toDate().toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const today = new Date().toDateString();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-lg text-gray-600">Loading profile...</p>
       </div>
-      <Badge className={`px-3 py-1 text-xs ${
-        status === 'upcoming' 
-          ? 'bg-green-100 text-green-800 border-green-200' 
-          : 'bg-gray-100 text-gray-800 border-gray-200'
-      }`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    </div>
-  </Card>
-);
+    );
+  }
 
-type DoctorParams = Promise<{ id: string }>;
-
-const Doctor = ({ params }: { params: DoctorParams }) => {
-  // Unwrap the params Promise using React.use()
-  const { id: doctorId } = use(params);
-  const docData = DocData.find((doc) => doc.id.toString() === doctorId);
-  const router = useRouter();
-
-  if (!docData) {
+  if (!doctor) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-2">Doctor not found</h1>
-          <p className="text-gray-600">The requested doctor profile could not be found.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Doctor Not Found</h1>
+          <p className="text-gray-600">The requested doctor profile does not exist.</p>
         </div>
       </div>
     );
   }
 
-  const services = [
-    {
-      title: 'Dermatology',
-      description: 'Manage dermatology consultations and patient cases',
-      icon: <HeartPulse className="h-6 w-6" />,
-      path: '/doctor/dermatology',
-    },
-    {
-      title: 'Mental Health',
-      description: 'Manage therapy sessions and mental health consultations',
-      icon: <Brain className="h-6 w-6" />,
-      path: '/doctor/mental-health',
-    },
-    {
-      title: 'Regular Checkup',
-      description: 'Manage general checkups and follow-up appointments',
-      icon: <Stethoscope className="h-6 w-6" />,
-      path: '/doctor/checkup',
-    },
-    {
-      title: 'Infant & Prenatal Care',
-      description: 'Manage prenatal and infant care consultations',
-      icon: <Baby className="h-6 w-6" />,
-      path: '/doctor/prenatal-care',
-    },
-  ];
+  const todayAppointments = appointments.filter(
+    (a) => a.appointmentDate?.toDate().toDateString() === today
+  );
 
-  const upcomingAppointments = [
-    {
-      patientName: 'Alex Johnson',
-      specialty: 'Dermatology',
-      date: 'Aug 15, 2023',
-      time: '10:30 AM',
-      status: 'upcoming',
-    },
-    {
-      patientName: 'Emma Rodriguez',
-      specialty: 'Psychiatry',
-      date: 'Aug 15, 2023',
-      time: '11:30 AM',
-      status: 'upcoming',
-    },
-  ];
+  // const upcomingAppointments = appointments.filter(
+  //   (a) =>
+  //     a.appointmentDate?.toDate() > new Date() &&
+  //     a.appointmentDate?.toDate().toDateString() !== today
+  // );
 
-  const recentPatients = [
-    {
-      name: 'Sam Wilson',
-      lastVisit: 'Aug 10, 2023',
-      condition: 'Eczema',
-    },
-    {
-      name: 'Jamie Lee',
-      lastVisit: 'Aug 8, 2023',
-      condition: 'Anxiety',
-    },
-    {
-      name: 'Taylor Smith',
-      lastVisit: 'Aug 5, 2023',
-      condition: 'Prenatal Checkup',
-    },
-  ];
+  const workingDays = doctor.schedule?.workingDays || [1, 2, 3, 4, 5];
+  const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 md:px-8 py-6 font-poppins">
+    <div className="min-h-screen px-4 md:px-8 py-8 font-poppins">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Doctor Profile Card */}
-        <Card className="p-8 shadow-sm border border-gray-200 bg-white">
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div className="w-24 h-24 border-2 border-green-200 overflow-hidden">
+
+        {/* Profile Card */}
+        <Card className="p-8 bg-white shadow-sm border border-gray-200">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+            <div className="w-32 h-32 rounded-full border-4 border-green-100 overflow-hidden shadow-md">
               <Image
-                src={docData.img || "/images/user.png"}
-                alt="doctor"
-                width={96}
-                height={96}
-                className="object-cover w-full h-full"
+                src={doctor.img || "/images/user.png"}
+                alt={doctor.name}
+                width={128}
+                height={128}
+                className="w-full h-full object-cover"
               />
             </div>
+
             <div className="flex-1 text-center md:text-left">
-              <h1 className="font-semibold text-2xl text-gray-900 mb-2">
-                Dr. {docData.name}
-              </h1>
-              <p className="text-lg text-green-600 font-medium mb-3">{docData.spec}</p>
-              <div className="flex flex-col sm:flex-row gap-4 text-sm text-gray-600">
-                <span className="flex items-center justify-center md:justify-start">
-                  <Phone className="h-4 w-4 mr-2" />
-                  {docData.whatsappNumber}
+              <h1 className="text-3xl font-bold text-gray-900">{doctor.name}</h1>
+              <p className="text-xl text-green-600 font-medium mt-1 capitalize">
+                {doctor.specialty}
+              </p>
+              <p className="text-gray-600 mt-2">
+                {doctor.experience_years} years of experience
+              </p>
+
+              <div className="flex flex-wrap gap-6 mt-5 text-gray-600">
+                <span className="flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-green-600" />
+                  {doctor.whatsappNumber || doctor.phone}
                 </span>
-                <span className="flex items-center justify-center md:justify-start">
-                  <MapPin className="h-4 w-4 mr-2" />
-                  General Hospital - Floor 3, Room 304
+                <span className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-green-600" />
+                  {doctor.clinic}
                 </span>
               </div>
             </div>
-            <div className="flex gap-3">
-              <Button className="bg-green-600 hover:bg-green-700 text-white px-6">
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button className="bg-green-600 hover:bg-green-700 text-white px-8">
                 Start Consultation
               </Button>
               <Button variant="outline" className="border-green-600 text-green-600 hover:bg-green-50">
@@ -213,180 +229,186 @@ const Doctor = ({ params }: { params: DoctorParams }) => {
           </div>
         </Card>
 
-        {/* Dashboard Content */}
-        <div className="space-y-8">
-          {/* Service Cards */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Medical Services</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {services.map((service) => (
-                <ServiceCard
-                  key={service.title}
-                  title={service.title}
-                  description={service.description}
-                  icon={service.icon}
-                  onClick={() => router.push(service.path)}
-                />
-              ))}
+        {/* Medical Services */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Medical Services</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {[
+              { title: "Dermatology", icon: <HeartPulse className="h-7 w-7" />, path: "/doctor/dermatology" },
+              { title: "Mental Health", icon: <Brain className="h-7 w-7" />, path: "/doctor/mental-health" },
+              { title: "Regular Checkup", icon: <Stethoscope className="h-7 w-7" />, path: "/doctor/checkup" },
+              { title: "Prenatal Care", icon: <Baby className="h-7 w-7" />, path: "/doctor/prenatal-care" },
+            ].map((service) => (
+              <Card
+                key={service.title}
+                className="p-6 hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-green-600 bg-white hover:bg-green-50"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{service.title}</h3>
+                    <p className="text-sm text-gray-600 mt-1">Manage {service.title.toLowerCase()} cases</p>
+                  </div>
+                  <div className="text-green-600 bg-green-100 p-3 rounded-lg">
+                    {service.icon}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left: Appointments + Schedule */}
+          <div className="lg:col-span-2 space-y-8">
+
+            {/* Today's Appointments */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                <Calendar className="h-6 w-6 text-green-600" />
+                Today&apos;s Appointments
+              </h2>
+              {todayAppointments.length === 0 ? (
+                <Card className="p-10 text-center border-dashed">
+                  <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No appointments scheduled for today</p>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {todayAppointments.map((appt) => (
+                    <Card key={appt.id} className="p-6 hover:border-green-300 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{appt.patientName}</h3>
+                          <p className="text-sm text-gray-600">{appt.patientEmail}</p>
+                          <div className="flex gap-6 mt-3 text-sm text-gray-600">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              {formatTime(appt.appointmentDate)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge className="bg-green-100 text-green-800 mb-2">
+                            {appt.status}
+                          </Badge>
+                          {appt.meetingLink && (
+                            <Button
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => window.open(appt.meetingLink, "_blank")}
+                            >
+                              Join Call
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Weekly Schedule */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                <Clock className="h-6 w-6 text-green-600" />
+                Weekly Schedule
+              </h2>
+              <Card className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold">Office Hours</h3>
+                  <Button variant="outline" size="sm" className="border-green-600 text-green-600">
+                    Edit Schedule
+                  </Button>
+                </div>
+                <div className="grid grid-cols-7 gap-3">
+                  {days.map((day, i) => {
+                    const isWorking = workingDays.includes(i);
+                    const hours = isWorking
+                      ? doctor.schedule?.workingHours
+                        ? `${doctor.schedule.workingHours.start} - ${doctor.schedule.workingHours.end}`
+                        : "08:00 - 16:00"
+                      : "OFF";
+
+                    return (
+                      <div
+                        key={day}
+                        className={`text-center p-4 rounded-lg border ${
+                          isWorking
+                            ? "bg-green-50 border-green-300 text-gray-900"
+                            : "bg-gray-50 border-gray-300 text-gray-500"
+                        }`}
+                      >
+                        <div className="font-semibold text-sm">{day}</div>
+                        <div className="text-xs mt-1">{hours}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
             </div>
           </div>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Today's Appointments */}
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Calendar className="h-5 w-5 mr-3 text-green-600" />
-                  Today&apos;s Appointments
-                </h2>
-                <div className="space-y-3">
-                  {upcomingAppointments.length > 0 ? (
-                    upcomingAppointments.map((appointment, index) => (
-                      <AppointmentCard
-                        key={index}
-                        patientName={appointment.patientName}
-                        specialty={appointment.specialty}
-                        date={appointment.date}
-                        time={appointment.time}
-                        status={appointment.status}
-                      />
-                    ))
-                  ) : (
-                    <Card className="p-8 text-center border border-gray-200">
-                      <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-500 text-lg font-medium">No appointments scheduled for today</p>
-                      <p className="text-gray-400 text-sm mt-1">All appointments are completed or rescheduled</p>
-                    </Card>
-                  )}
-                </div>
-              </div>
+          {/* Right Sidebar */}
+          <div className="space-y-8">
 
-              {/* Availability Settings */}
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Clock className="h-5 w-5 mr-3 text-green-600" />
-                  Weekly Schedule
-                </h2>
-                <Card className="p-6 border border-gray-200">
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold text-gray-900 text-base">Office Hours</h3>
-                      <Button variant="outline" size="sm" className="border-green-600 text-green-600 hover:bg-green-50">
-                        Edit Schedule
-                      </Button>
+            {/* Recent Patients */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                <Users className="h-6 w-6 text-green-600" />
+                Recent Patients
+              </h2>
+              <Card>
+                <div className="divide-y">
+                  {appointments.slice(0, 4).map((appt) => (
+                    <div key={appt.id} className="p-4 hover:bg-gray-50 flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-gray-900">{appt.patientName}</p>
+                        <p className="text-xs text-gray-500">
+                          {formatDate(appt.appointmentDate)} at {formatTime(appt.appointmentDate)}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-                      {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, index) => (
-                        <div
-                          key={day}
-                          className={`text-center p-3 border ${
-                            ['THU', 'SAT', 'SUN'].includes(day)
-                              ? 'bg-gray-50 border-gray-300 text-gray-500'
-                              : 'bg-green-50 border-green-300 text-gray-900'
-                          }`}
-                        >
-                          <div className="font-semibold text-sm mb-1">{day}</div>
-                          <div className="text-xs">
-                            {['THU', 'SAT', 'SUN'].includes(day) 
-                              ? 'OFF' 
-                              : index === 4 
-                                ? '9:00 - 15:00' 
-                                : '9:00 - 17:00'
-                            }
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              </div>
+                  ))}
+                </div>
+                <Button variant="ghost" className="w-full mt-2 text-green-600">
+                  View all patients
+                </Button>
+              </Card>
             </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Recent Patients */}
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Users className="h-5 w-5 mr-3 text-green-600" />
-                  Recent Patients
-                </h2>
-                <Card className="border border-gray-200">
-                  <div className="divide-y divide-gray-200">
-                    {recentPatients.map((patient, index) => (
-                      <div
-                        key={index}
-                        className="py-4 px-4 flex justify-between items-center hover:bg-gray-50 transition-colors cursor-pointer"
-                      >
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 text-sm mb-1">{patient.name}</h3>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">
-                              Last visit: {patient.lastVisit}
-                            </span>
-                            <Badge className="text-xs bg-gray-100 text-gray-800 border-gray-300">
-                              {patient.condition}
-                            </Badge>
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-gray-400 ml-2" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="pt-3 mt-1 border-t border-gray-200">
-                    <Button variant="ghost" size="sm" className="w-full text-green-600 hover:text-green-700 hover:bg-green-50">
-                      View all patients
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Notifications */}
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Bell className="h-5 w-5 mr-3 text-green-600" />
-                  Notifications
-                </h2>
-                <Card className="border border-gray-200">
-                  <div className="space-y-4 p-4">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 mt-1">
-                        <div className="h-2 w-2 bg-green-600"></div>
-                      </div>
-                      <div className="ml-3 flex-1">
-                        <p className="text-sm font-semibold text-gray-900">
-                          New patient referral
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">Maria Garcia - Dermatology</p>
-                        <p className="text-xs text-gray-400">30 minutes ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 mt-1">
-                        <div className="h-2 w-2 bg-green-600"></div>
-                      </div>
-                      <div className="ml-3 flex-1">
-                        <p className="text-sm font-semibold text-gray-900">
-                          Prescription renewal request
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">David Kim - Medication refill</p>
-                        <p className="text-xs text-gray-400">2 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="pt-3 mt-2 border-t border-gray-200">
-                      <Button variant="ghost" size="sm" className="w-full text-green-600 hover:text-green-700 hover:bg-green-50">
-                        View all notifications
-                      </Button>
+            {/* Notifications */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-5 flex items-center gap-3">
+                <Bell className="h-6 w-6 text-green-600" />
+                Notifications
+              </h2>
+              <Card className="p-5">
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
+                    <div>
+                      <p className="font-medium text-sm">New appointment booked</p>
+                      <p className="text-xs text-gray-500">Levi Mathews - Dec 3, 2025</p>
                     </div>
                   </div>
-                </Card>
-              </div>
+                  <div className="flex gap-3">
+                    <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
+                    <div>
+                      <p className="font-medium text-sm">Prescription ready</p>
+                      <p className="text-xs text-gray-500">For patient Alex Johnson</p>
+                    </div>
+                  </div>
+                </div>
+                <Button variant="ghost" className="w-full mt-4 text-green-600">
+                  View all notifications
+                </Button>
+              </Card>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default Doctor;
+}

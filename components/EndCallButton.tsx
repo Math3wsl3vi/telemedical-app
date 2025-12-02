@@ -20,7 +20,7 @@ const EndCallButton = () => {
   return (
     <Button onClick={async()=> {
         await call.endCall();
-        router.push('/')
+        router.push('/medicationConfirm')
     }}
     className='bg-red-500'
     >

@@ -22,16 +22,26 @@ import { ReactNode, useEffect, useState } from "react";
         if(!isLoaded || !user) return;
         if(!apiKey) throw new Error('stream API key missing');
 
-        const client = new StreamVideoClient({
-            apiKey,
-            user:{
-                id:user?.id,
-                name: user?.username || user?.id,
-                image: user?.imageUrl
-            },
-            tokenProvider,
-        })
-        setVideoClient(client)
+        const initializeClient = async () => {
+            try {
+                const token = await tokenProvider();
+                const client = new StreamVideoClient({
+                    apiKey,
+                    user:{
+                        id:user?.id,
+                        name: user?.username || user?.id,
+                        image: user?.imageUrl
+                    },
+                    token,
+                })
+                setVideoClient(client)
+            } catch (error) {
+                console.error('Failed to initialize Stream client:', error);
+                throw error;
+            }
+        }
+
+        initializeClient();
     },[user, isLoaded])
 
     if(!videoClient) return <Loader/>

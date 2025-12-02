@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabaseService } from '@/lib/supabase';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export async function POST(request: Request) {
   try {
@@ -14,20 +15,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 });
     }
 
-    const fileName = `license-${Date.now()}.pdf`;
-    const { data, error } = await supabaseService.storage
-      .from('licenses')
-      .upload(fileName, file, {
-        contentType: 'application/pdf',
-        upsert: false,
-      });
+    const fileName = `licenses/license-${Date.now()}.pdf`;
+    const storageRef = ref(storage, fileName);
+    
+    // Convert File to Uint8Array for Firebase
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    await uploadBytes(storageRef, uint8Array, {
+      contentType: 'application/pdf',
+    });
 
-    if (error) {
-      console.error('Upload error:', error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    const url = supabaseService.storage.from('licenses').getPublicUrl(data.path).data.publicUrl;
+    const url = await getDownloadURL(storageRef);
     return NextResponse.json({ url });
   } catch (err) {
     console.error('API error:', err);

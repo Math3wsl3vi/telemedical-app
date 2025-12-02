@@ -24,7 +24,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Virtual Hospital",
+  title: "DaktariConnect",
   description: "Virtual Hospital for Consultations",
   icons:{
     icon:'/icons/logo.svg'

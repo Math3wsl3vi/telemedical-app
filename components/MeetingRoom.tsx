@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { CallControls, CallingState, CallParticipantsList, CallStatsButton, PaginatedGridLayout, SpeakerLayout, useCallStateHooks } from '@stream-io/video-react-sdk'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +30,21 @@ const MeetingRoom = () => {
   const [layout, setLayout ] = useState<CallLayoutType>('speaker-left')
   const [showParticipants, setShowParticipants ] = useState(false);
   const [isOpen, setIsOpen ] = useState(false)
+  const [prevCallState, setPrevCallState] = useState<CallingState | null>(null);
 
   const { useCallCallingState } = useCallStateHooks();
   const callingState = useCallCallingState();
+
+  // Navigate to medication confirmation when call ends (only if it was previously JOINED)
+  useEffect(() => {
+    if(prevCallState === CallingState.JOINED && callingState !== CallingState.JOINED) {
+      const timer = setTimeout(() => {
+        router.push('/medicationConfirm');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    setPrevCallState(callingState);
+  }, [callingState, router, prevCallState]);
 
   if(callingState !== CallingState.JOINED) return <Loader/>
 
@@ -184,7 +196,7 @@ const MeetingRoom = () => {
             <Button
               onClick={() => {
                 setIsOpen(false)
-                router.push('/')
+                router.push('/medicationConfirm')
               }}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white py-6 text-base font-semibold"
             >

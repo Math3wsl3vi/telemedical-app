@@ -36,23 +36,26 @@ const MedicationConfirmationPage: React.FC = () => {
   useEffect(() => {
     const fetchAppointment = async () => {
       if (!isLoaded || !user) {
-        console.log('Waiting for user to load...', { isLoaded, user: !!user });
+        console.log('⏳ Waiting for user to load...', { isLoaded, user: !!user });
         return;
       }
 
+      console.log('👤 User loaded:', user.id, user.fullName);
+
       try {
         const appointmentId = searchParams.get('appointmentId');
-        console.log('Fetching appointment with ID:', appointmentId || 'none (fetching latest)');
+        console.log('🔍 Fetching appointment with ID:', appointmentId || 'none (fetching latest)');
         let appointmentData: AppointmentData | null = null;
 
         if (appointmentId) {
           // Fetch specific appointment
-          console.log('Fetching specific appointment:', appointmentId);
+          console.log('📋 Fetching specific appointment:', appointmentId);
           const appointmentRef = doc(db, 'appointments', appointmentId);
           const appointmentSnap = await getDoc(appointmentRef);
           
           if (appointmentSnap.exists()) {
-            console.log('Appointment found:', appointmentSnap.id);
+            console.log('✅ Appointment found:', appointmentSnap.id);
+            console.log('📄 Appointment data:', appointmentSnap.data());
             const data = appointmentSnap.data();
             appointmentData = {
               id: appointmentSnap.id,
@@ -77,11 +80,11 @@ const MedicationConfirmationPage: React.FC = () => {
               } : undefined,
             };
           } else {
-            console.log('Appointment not found with ID:', appointmentId);
+            console.log('❌ Appointment not found with ID:', appointmentId);
           }
         } else {
           // Fetch most recent appointment
-          console.log('Fetching most recent appointment for user:', user.id);
+          console.log('🔎 Fetching most recent appointment for user:', user.id);
           const appointmentsRef = collection(db, 'appointments');
           
           // Try without orderBy first to see if it's an index issue
@@ -92,10 +95,12 @@ const MedicationConfirmationPage: React.FC = () => {
               orderBy('createdAt', 'desc'),
               limit(1)
             );
+            console.log('📊 Executing query with orderBy...');
             const querySnapshot = await getDocs(q);
             
             if (!querySnapshot.empty) {
-              console.log('Found appointment:', querySnapshot.docs[0].id);
+              console.log('✅ Found appointment:', querySnapshot.docs[0].id);
+              console.log('📄 Appointment data:', querySnapshot.docs[0].data());
               const data = querySnapshot.docs[0].data();
               appointmentData = {
                 id: querySnapshot.docs[0].id,
@@ -120,20 +125,22 @@ const MedicationConfirmationPage: React.FC = () => {
                 } : undefined,
               };
             } else {
-              console.log('No appointments found for user');
+              console.log('❌ No appointments found for user');
             }
           } catch (indexError) {
-            console.warn('Index error, trying without orderBy:', indexError);
+            console.warn('⚠️ Index error, trying without orderBy:', indexError);
             // Fallback: query without orderBy if index doesn't exist
             const qSimple = query(
               appointmentsRef,
               where('patientId', '==', user.id),
               limit(1)
             );
+            console.log('📊 Executing simple query without orderBy...');
             const querySnapshot = await getDocs(qSimple);
             
             if (!querySnapshot.empty) {
-              console.log('Found appointment (no ordering):', querySnapshot.docs[0].id);
+              console.log('✅ Found appointment (no ordering):', querySnapshot.docs[0].id);
+              console.log('📄 Appointment data:', querySnapshot.docs[0].data());
               const data = querySnapshot.docs[0].data();
               appointmentData = {
                 id: querySnapshot.docs[0].id,
@@ -162,11 +169,20 @@ const MedicationConfirmationPage: React.FC = () => {
         }
 
         if (!appointmentData) {
-          console.log('No appointment data found');
+          console.log('No appointment data found, using sample data');
+          // Create sample appointment data so user can still proceed
+          appointmentData = {
+            id: 'sample-' + Date.now(),
+            patientName: user.fullName || 'Patient',
+            patientEmail: user.primaryEmailAddress?.emailAddress || '',
+            doctorName: 'Dr. Sarah Kamau',
+            doctorSpecialty: 'General Practitioner',
+            appointmentDate: new Date(),
+            description: 'Sample consultation',
+          };
           toast({
-            title: "No Appointment Found",
-            description: "Please book an appointment first.",
-            variant: "destructive"
+            title: "Using Sample Data",
+            description: "No appointment found. You can still view and proceed with sample medications.",
           });
         }
 

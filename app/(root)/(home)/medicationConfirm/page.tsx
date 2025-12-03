@@ -35,18 +35,24 @@ const MedicationConfirmationPage: React.FC = () => {
   // Fetch appointment data
   useEffect(() => {
     const fetchAppointment = async () => {
-      if (!isLoaded || !user) return;
+      if (!isLoaded || !user) {
+        console.log('Waiting for user to load...', { isLoaded, user: !!user });
+        return;
+      }
 
       try {
         const appointmentId = searchParams.get('appointmentId');
+        console.log('Fetching appointment with ID:', appointmentId || 'none (fetching latest)');
         let appointmentData: AppointmentData | null = null;
 
         if (appointmentId) {
           // Fetch specific appointment
+          console.log('Fetching specific appointment:', appointmentId);
           const appointmentRef = doc(db, 'appointments', appointmentId);
           const appointmentSnap = await getDoc(appointmentRef);
           
           if (appointmentSnap.exists()) {
+            console.log('Appointment found:', appointmentSnap.id);
             const data = appointmentSnap.data();
             appointmentData = {
               id: appointmentSnap.id,
@@ -70,43 +76,98 @@ const MedicationConfirmationPage: React.FC = () => {
                 prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
               } : undefined,
             };
+          } else {
+            console.log('Appointment not found with ID:', appointmentId);
           }
         } else {
           // Fetch most recent appointment
+          console.log('Fetching most recent appointment for user:', user.id);
           const appointmentsRef = collection(db, 'appointments');
-          const q = query(
-            appointmentsRef,
-            where('patientId', '==', user.id),
-            orderBy('createdAt', 'desc'),
-            limit(1)
-          );
-          const querySnapshot = await getDocs(q);
           
-          if (!querySnapshot.empty) {
-            const data = querySnapshot.docs[0].data();
-            appointmentData = {
-              id: querySnapshot.docs[0].id,
-              patientName: data.patientName || user.fullName || 'Patient',
-              patientEmail: data.patientEmail || user.primaryEmailAddress?.emailAddress || '',
-              doctorName: data.doctorName,
-              doctorSpecialty: data.doctorSpecialty,
-              appointmentDate: data.appointmentDate?.toDate() || new Date(),
-              description: data.description,
-              prescription: data.prescription ? {
-                medications: data.prescription.medications || [],
-                notes: data.prescription.notes?.map((note: {
-                  id: string;
-                  content: string;
-                  type: string;
-                  timestamp: {toDate?: () => Date} | Date;
-                }) => ({
-                  ...note,
-                  timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
-                })) || [],
-                prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
-              } : undefined,
-            };
+          // Try without orderBy first to see if it's an index issue
+          try {
+            const q = query(
+              appointmentsRef,
+              where('patientId', '==', user.id),
+              orderBy('createdAt', 'desc'),
+              limit(1)
+            );
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              console.log('Found appointment:', querySnapshot.docs[0].id);
+              const data = querySnapshot.docs[0].data();
+              appointmentData = {
+                id: querySnapshot.docs[0].id,
+                patientName: data.patientName || user.fullName || 'Patient',
+                patientEmail: data.patientEmail || user.primaryEmailAddress?.emailAddress || '',
+                doctorName: data.doctorName,
+                doctorSpecialty: data.doctorSpecialty,
+                appointmentDate: data.appointmentDate?.toDate() || new Date(),
+                description: data.description,
+                prescription: data.prescription ? {
+                  medications: data.prescription.medications || [],
+                  notes: data.prescription.notes?.map((note: {
+                    id: string;
+                    content: string;
+                    type: string;
+                    timestamp: {toDate?: () => Date} | Date;
+                  }) => ({
+                    ...note,
+                    timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
+                  })) || [],
+                  prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
+                } : undefined,
+              };
+            } else {
+              console.log('No appointments found for user');
+            }
+          } catch (indexError) {
+            console.warn('Index error, trying without orderBy:', indexError);
+            // Fallback: query without orderBy if index doesn't exist
+            const qSimple = query(
+              appointmentsRef,
+              where('patientId', '==', user.id),
+              limit(1)
+            );
+            const querySnapshot = await getDocs(qSimple);
+            
+            if (!querySnapshot.empty) {
+              console.log('Found appointment (no ordering):', querySnapshot.docs[0].id);
+              const data = querySnapshot.docs[0].data();
+              appointmentData = {
+                id: querySnapshot.docs[0].id,
+                patientName: data.patientName || user.fullName || 'Patient',
+                patientEmail: data.patientEmail || user.primaryEmailAddress?.emailAddress || '',
+                doctorName: data.doctorName,
+                doctorSpecialty: data.doctorSpecialty,
+                appointmentDate: data.appointmentDate?.toDate() || new Date(),
+                description: data.description,
+                prescription: data.prescription ? {
+                  medications: data.prescription.medications || [],
+                  notes: data.prescription.notes?.map((note: {
+                    id: string;
+                    content: string;
+                    type: string;
+                    timestamp: {toDate?: () => Date} | Date;
+                  }) => ({
+                    ...note,
+                    timestamp: (note.timestamp as {toDate?: () => Date})?.toDate ? (note.timestamp as {toDate: () => Date}).toDate() : note.timestamp as Date
+                  })) || [],
+                  prescribedAt: data.prescription.prescribedAt?.toDate?.() || undefined,
+                } : undefined,
+              };
+            }
           }
+        }
+
+        if (!appointmentData) {
+          console.log('No appointment data found');
+          toast({
+            title: "No Appointment Found",
+            description: "Please book an appointment first.",
+            variant: "destructive"
+          });
         }
 
         setAppointment(appointmentData);
@@ -114,7 +175,7 @@ const MedicationConfirmationPage: React.FC = () => {
         console.error('Error fetching appointment:', error);
         toast({
           title: "Error",
-          description: "Could not load appointment details.",
+          description: `Could not load appointment details: ${error instanceof Error ? error.message : 'Unknown error'}`,
           variant: "destructive"
         });
       } finally {

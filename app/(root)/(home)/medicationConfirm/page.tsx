@@ -6,7 +6,7 @@ import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from '
 import { db } from '@/lib/firebase';
 import Loader from '@/components/Loader';
 import { useToast } from '@/hooks/use-toast';
-import { Medication, DoctorNote } from '@/lib/appointments';
+import { Medication, DoctorNote, saveAppointment } from '@/lib/appointments';
 
 interface AppointmentData {
   id: string;
@@ -31,6 +31,45 @@ const MedicationConfirmationPage: React.FC = () => {
   const searchParams = useSearchParams();
   const { user, isLoaded } = useUser();
   const { toast } = useToast();
+
+  // Debug function to create a test appointment
+  const createTestAppointment = async () => {
+    if (!user) return;
+    
+    try {
+      const appointmentId = await saveAppointment({
+        patientId: user.id,
+        patientName: user.fullName || 'Test Patient',
+        patientEmail: user.primaryEmailAddress?.emailAddress || 'test@example.com',
+        doctorId: 'test-doctor-123',
+        doctorName: 'Dr. Jane Smith',
+        doctorSpecialty: 'General Practitioner',
+        appointmentDate: new Date(),
+        meetingId: 'test-meeting-' + Date.now(),
+        meetingLink: 'https://example.com/meeting',
+        description: 'Test appointment for debugging',
+        paymentStatus: 'pending',
+        status: 'scheduled',
+      });
+      
+      toast({
+        title: "Test Appointment Created!",
+        description: `Appointment ID: ${appointmentId}. Reloading page...`
+      });
+      
+      // Reload after 1 second
+      setTimeout(() => {
+        window.location.href = `/medicationConfirm?appointmentId=${appointmentId}`;
+      }, 1000);
+    } catch (error) {
+      console.error('Error creating test appointment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create test appointment",
+        variant: "destructive"
+      });
+    }
+  };
 
   // Fetch appointment data
   useEffect(() => {
@@ -218,7 +257,19 @@ const MedicationConfirmationPage: React.FC = () => {
     <div className="min-h-screen">
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 py-8">
-        <h2 className="text-3xl font-semibold text-gray-800 mb-8">Medication Confirmation</h2>
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-semibold text-gray-800">Medication Confirmation</h2>
+          
+          {/* Debug Button - Only show in development */}
+          {process.env.NODE_ENV === 'development' && !appointment?.id.startsWith('sample-') && (
+            <button
+              onClick={createTestAppointment}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-md transition"
+            >
+              🧪 Create Test Appointment
+            </button>
+          )}
+        </div>
 
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           {/* Patient Information */}

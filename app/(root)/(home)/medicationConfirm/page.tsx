@@ -328,15 +328,14 @@ const MedicationConfirmationPage: React.FC = () => {
               <div className="space-y-4 bg-gray-50 p-5 rounded-lg">
                 <div className="bg-white p-4 rounded border border-gray-200">
                   <p className="font-medium text-gray-900">
-                    Amoxicillin, 500mg, 3 times daily, 7 days
+                    Panadol, 500mg, 3 times daily, 7 days
                   </p>
                 </div>
                 <div className="bg-white p-4 rounded border border-gray-200">
                   <p className="font-medium text-gray-900">
-                    Ibuprofen, 400mg, as needed for pain
+                    Piriton, 100mg, 1 times daily , 5 days 
                   </p>
                 </div>
-                <p className="text-sm text-gray-500 text-center pt-2">Sample medications (Doctor has not prescribed yet)</p>
               </div>
             )}
 

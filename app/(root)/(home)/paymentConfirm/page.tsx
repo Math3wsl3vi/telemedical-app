@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Download, Home, CreditCard, FileText } from 'lucide-react';
+import { CheckCircle, Home, CreditCard, FileText } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@clerk/nextjs';
@@ -262,55 +262,6 @@ const PaymentConfirmationPage: React.FC = () => {
     }
   };
 
-  // Generate Receipt PDF
-  const downloadReceipt = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Header
-    doc.setFontSize(20);
-    doc.setFont("helvetica", "bold");
-    doc.text("MEDICAL RECEIPT", pageWidth / 2, 20, { align: "center" });
-
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Order ID: ${order.orderId}`, 20, 35);
-    doc.text(`Patient: ${order.patientName}`, 20, 43);
-    doc.text(`Date: ${order.date}`, 20, 51);
-    doc.text(`Payment Status: ${paymentInitiated ? "Pending Confirmation" : "Awaiting Payment"}`, 20, 59);
-
-    // Table
-    const tableData = order.medications.map(m => [
-      m.name,
-      m.dosage,
-      m.duration,
-      `KES ${m.price.toLocaleString()}`
-    ]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (doc as any).autoTable({
-      head: [["Medicine", "Dosage Instructions", "Duration", "Price"]],
-      body: tableData,
-      startY: 70,
-      theme: "grid",
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [59, 130, 246] },
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const finalY = (doc as any).lastAutoTable.finalY;
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Total: KES ${order.total.toLocaleString()}`, pageWidth - 40, finalY + 15, { align: "right" });
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Thank you for using our service!", pageWidth / 2, finalY + 30, { align: "center" });
-
-    doc.save(`Receipt_${order.orderId}.pdf`);
-    toast({ title: "Receipt Downloaded", description: "Your receipt has been saved." });
-  };
-
 // Generate Professional Prescription PDF
 const downloadPrescription = () => {
   const doc = new jsPDF();
@@ -540,15 +491,6 @@ const downloadPrescription = () => {
             >
               <FileText className="w-6 h-6" />
               Download Prescription (For Any Pharmacy)
-            </button>
-
-            {/* Download Receipt */}
-            <button
-              onClick={downloadReceipt}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-6 rounded-md flex items-center justify-center gap-3 transition"
-            >
-              <Download className="w-5 h-5" />
-              Download Receipt
             </button>
 
             <button
